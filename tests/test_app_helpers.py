@@ -50,17 +50,35 @@ def test_prepare_candidates_from_uploads_valid_txt():
 
     candidates, warnings = prepare_candidates_from_uploads([mock_file])
     assert len(candidates) == 1
-    assert "resume.txt" in candidates
-    assert "Python and SQL" in candidates["resume.txt"]
+    assert "Uploaded_Candidate_001" in candidates
+    assert "resume.txt" not in candidates
+    assert "Python and SQL" in candidates["Uploaded_Candidate_001"]
     assert len(warnings) == 0
 
 
 def test_prepare_candidates_from_uploads_empty_file():
     mock_file = MockUploadedFile("empty.txt", b"")
     candidates, warnings = prepare_candidates_from_uploads([mock_file])
-    assert "empty.txt" in candidates
-    assert candidates["empty.txt"] == ""
-    assert any("no extractable text" in w.lower() for w in warnings)
+    assert "Uploaded_Candidate_001" in candidates
+    assert "empty.txt" not in candidates
+    assert candidates["Uploaded_Candidate_001"] == ""
+    assert any("empty.txt" in w and "no extractable text" in w.lower() for w in warnings)
+
+
+def test_prepare_candidates_from_uploads_multiple_sequential_ids():
+    files = [
+        MockUploadedFile("first.txt", b"First candidate text with Python"),
+        MockUploadedFile("second.txt", b"Second candidate text with SQL"),
+        MockUploadedFile("third.txt", b"Third candidate text with Docker"),
+    ]
+    candidates, warnings = prepare_candidates_from_uploads(files)
+    assert len(candidates) == 3
+    assert list(candidates.keys()) == [
+        "Uploaded_Candidate_001",
+        "Uploaded_Candidate_002",
+        "Uploaded_Candidate_003",
+    ]
+    assert len(warnings) == 0
 
 
 def test_format_export_dataframe_strips_pii_and_raw_text():
@@ -133,3 +151,49 @@ def test_csv_export_content_has_no_contact_info_or_full_paragraphs():
         "Missing Skills Count", "Matched Skills", "Missing Skills", "Explanation"
     }
     assert set(exported_df.columns).issubset(expected_allowed)
+
+
+def test_uploaded_filenames_do_not_leak_into_csv_candidate_ids():
+    """
+    Verify that personal filenames from uploaded files (PDF/TXT) are replaced by
+    neutral IDs (Uploaded_Candidate_001, etc.) and CANNOT leak into CSV candidate IDs.
+    """
+    from src.ranking import rank_candidates, candidates_to_dataframe
+
+    # Uploaded files with personal identifiers in the filename
+    file1 = MockUploadedFile(
+        "John_Doe_Confidential_Senior_Resume_2026.txt",
+        b"Senior Machine Learning Engineer with Python, PyTorch, Docker, and SQL experience."
+    )
+    file2 = MockUploadedFile(
+        "Jane_Smith_Private_CV.txt",
+        b"Data Scientist skilled in Python, Scikit-Learn, Pandas, and AWS."
+    )
+
+    candidates, warnings = prepare_candidates_from_uploads([file1, file2])
+
+    # Verify dictionary keys are strictly neutral IDs
+    assert "Uploaded_Candidate_001" in candidates
+    assert "Uploaded_Candidate_002" in candidates
+    assert "John_Doe_Confidential_Senior_Resume_2026.txt" not in candidates
+    assert "Jane_Smith_Private_CV.txt" not in candidates
+
+    # Run ranking and export pipeline
+    jd = "Machine Learning Engineer: Python, PyTorch, Docker, SQL, and AWS."
+    ranked = rank_candidates(candidates, job_description=jd)
+    ranked_df = candidates_to_dataframe(ranked)
+    exported_df = format_export_dataframe(ranked_df)
+
+    csv_text = exported_df.to_csv(index=False)
+
+    # 1. Candidate ID column values must be neutral IDs
+    exported_candidate_ids = exported_df["Candidate ID"].tolist()
+    assert set(exported_candidate_ids) == {"Uploaded_Candidate_001", "Uploaded_Candidate_002"}
+
+    # 2. Uploaded filenames and personal names must NOT appear in the CSV
+    assert "John_Doe" not in csv_text
+    assert "Jane_Smith" not in csv_text
+    assert "Confidential" not in csv_text
+    assert "Private_CV" not in csv_text
+    assert "John_Doe_Confidential_Senior_Resume_2026.txt" not in csv_text
+    assert "Jane_Smith_Private_CV.txt" not in csv_text

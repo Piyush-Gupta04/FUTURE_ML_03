@@ -50,26 +50,30 @@ def prepare_candidates_from_uploads(
 ) -> Tuple[Dict[str, str], List[str]]:
     """
     Parse uploaded PDF/TXT files in memory without saving to disk.
+    Assigns neutral candidate IDs (e.g. Uploaded_Candidate_001) to protect
+    candidate privacy and ensure personal filenames never leak into exported
+    screening results.
     Returns (candidates_dict, warnings_list).
     """
     candidates: Dict[str, str] = {}
     warnings: List[str] = []
 
-    for file_obj in uploaded_files:
+    for idx, file_obj in enumerate(uploaded_files, start=1):
+        cand_id = f"Uploaded_Candidate_{idx:03d}"
+        filename = getattr(file_obj, "name", f"file_{idx}")
         try:
             content_bytes = file_obj.getvalue()
-            filename = file_obj.name
             extraction = extract_text_from_file(content_bytes, filename=filename)
 
             if extraction.is_empty:
                 warnings.append(f"'{filename}' contained no extractable text.")
-                candidates[filename] = ""
+                candidates[cand_id] = ""
             else:
-                candidates[filename] = extraction.text
+                candidates[cand_id] = extraction.text
                 if extraction.warnings:
                     warnings.extend([f"'{filename}': {w}" for w in extraction.warnings])
         except Exception as exc:
-            warnings.append(f"Error parsing '{file_obj.name}': {str(exc)}")
+            warnings.append(f"Error parsing '{filename}': {str(exc)}")
 
     return candidates, warnings
 
