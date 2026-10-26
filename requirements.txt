@@ -1,0 +1,18 @@
+# Core data processing & numerical computation
+pandas>=2.2.0
+numpy>=1.26.0
+
+# Machine learning & text processing
+scikit-learn>=1.4.0
+
+# PDF text extraction
+pymupdf>=1.24.0
+
+# Web application dashboard
+streamlit>=1.35.0
+
+# Visualization
+matplotlib>=3.8.0
+
+# Testing framework
+pytest>=8.0.0

@@ -218,3 +218,23 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Candidate Data Protection & Privacy Exclusions
+uploads/
+temp/
+tmp/
+*.tmp
+data/raw/
+data/private/
+data/uploaded_resumes/
+data/kaggle/
+data/data/
+data/Resume/
+data/resume dataset/
+resume dataset/
+Resume/
+Resume.csv
+*.csv
+*.csv_output
+reports/generated/
+export_*.csv
